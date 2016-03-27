@@ -36,7 +36,7 @@ class Event2CalendarGUI(QtGui.QWidget):
         self.initUI()
 
     def initUI(self):
-        BUTTON_Y = 400
+        BUTTON_Y = 450
 
         self.btn = QtGui.QPushButton('Check text', self)
         self.btn.move(20, BUTTON_Y)
@@ -57,15 +57,17 @@ class Event2CalendarGUI(QtGui.QWidget):
         # self.le.move(130, 22)
 
         self.le = QtGui.QTextEdit(self)
-        self.le.move(40, 22)
+        self.le.setMinimumSize(400,400)
+        self.le.move(20, 22)
 
         self.textoutput = QtGui.QTextEdit(self)
         self.textoutput.move(440, 22)
+        self.textoutput.setMinimumSize(400,400)
         self.textoutput.setReadOnly(True)
 
 
-        self.setGeometry(200, 200, 800, 500)
-        self.setWindowTitle('Input dialog')
+        self.setGeometry(200, 200, 860, 500)
+        self.setWindowTitle('Event2Calendar')
 
         self.events = []
         self.show()
@@ -79,7 +81,7 @@ class Event2CalendarGUI(QtGui.QWidget):
         text = self.le.toPlainText().toUtf8()
         text = str(text)
         events = parse_text(text)
-        self.textoutput.setText(str(events))
+        self.textoutput.setText(str(events).decode('utf-8'))
         self.events = events
         # QtCore.QCoreApplication.instance().quit()
 
@@ -125,16 +127,16 @@ class Events2Calendar():
 
             start = event['start'].get('dateTime', event['start'].get('date'))
             if duplicity:
-                msg1 = msg1 + 'Event skipped: ' + start + ' ' + event['summary']
+                msg1 = msg1 + 'Skipped: ' + start + ' ' + event['summary'] + '\n'
             else:
                 if (not dryrun):
                     print ("adding to calendar")
                     evnt = self.service.events().insert(calendarId='primary', body=event).execute()
-                msg1 = msg1 + 'Event created: ' + start + ' ' + event['summary']
+                msg1 = msg1 + 'Created: ' + start + ' ' + event['summary'] + '\n'
 
             msg2 = msg2 + msgi
 
-        msg = msg1 + '\n\n' +  msg2
+        msg = msg1 + '\nEvents in calendar\n\n' +  msg2
         return msg
 
     def check_duplicity(self, event):
@@ -259,8 +261,10 @@ def parse_line(linetext, summaryprefix=''):
 
     # pridej mezery vsude
     # linetext = re.sub(r'\.', r'. ', linetext)
+    # remove multiple spaces
+    linetext = re.sub(r' +', r' ', linetext)
 
-    timere = r'\d{1,2}:\d{2}'
+    timere = r'v? ?\d{1,2}:\d{2}'
 
     out = re.search(timere, linetext)
 
