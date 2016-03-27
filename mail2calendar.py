@@ -39,22 +39,22 @@ class Event2CalendarGUI(QtGui.QWidget):
         BUTTON_Y = 450
 
         self.BUTTON_Y = BUTTON_Y
-        self.calendarID = 'primary'
+        self.calendarId = 'primary'
 
         self.btn = QtGui.QPushButton('Check text', self)
-        self.btn.move(200, BUTTON_Y)
+        self.btn.move(300, BUTTON_Y)
         self.btn.clicked.connect(self.buttonProcess)
 
         self.btn = QtGui.QPushButton('Check duplicities', self)
-        self.btn.move(380, BUTTON_Y)
+        self.btn.move(450, BUTTON_Y)
         self.btn.clicked.connect(self.buttonCheckDuplicities)
 
         self.btn = QtGui.QPushButton('Add to calendar', self)
-        self.btn.move(560, BUTTON_Y)
+        self.btn.move(600, BUTTON_Y)
         self.btn.clicked.connect(self.buttonEvents2Calendar)
 
         self.btnQuit = QtGui.QPushButton('Quit', self)
-        self.btnQuit.move(720, BUTTON_Y)
+        self.btnQuit.move(750, BUTTON_Y)
         self.btnQuit.clicked.connect(self.buttonQuit)
         # self.le = QtGui.QTextEdit(self)
         # self.le.move(130, 22)
@@ -80,22 +80,23 @@ class Event2CalendarGUI(QtGui.QWidget):
 
         e2c = Events2Calendar()
         lid, lsummary = e2c.calendars_list()
-        self.calendarsID = lid
+        self.calendarsId = lid
         self.calendarsSummary = lsummary
         comboBox = QtGui.QComboBox(self)
-        comboBox.addItem("motif")
-        comboBox.addItem("Windows")
-        comboBox.addItem("cde")
-        comboBox.addItem("Plastique")
-        comboBox.addItem("Cleanlooks")
-        comboBox.addItem("windowsvista")
+        comboBox.addItems(lsummary)
+        # comboBox.addItem("motif")
+        # comboBox.addItem("Windows")
+        # comboBox.addItem("cde")
+        # comboBox.addItem("Plastique")
+        # comboBox.addItem("Cleanlooks")
+        # comboBox.addItem("windowsvista")
         comboBox.move(20, self.BUTTON_Y)
         comboBox.activated.connect(self.comboCalendarFcn)
         self.calendarIdCombo = comboBox
 
     def comboCalendarFcn(self):
-        self.calendarIdCombo.currentIndex()
-        self
+        id = self.calendarIdCombo.currentIndex()
+        self.calendarId = self.calendarsId[id]
 
     def buttonQuit(self):
         QtCore.QCoreApplication.instance().quit()
@@ -110,13 +111,13 @@ class Event2CalendarGUI(QtGui.QWidget):
 
     def buttonEvents2Calendar(self):
         e2c = Events2Calendar()
-        msg = e2c.add_events(self.events, dryrun=False, calendarID=self.calendarID)
+        msg = e2c.add_events(self.events, dryrun=False, calendarId=self.calendarId)
         print (msg)
         self.textoutput.setText(str(msg).decode('utf-8'))
 
     def buttonCheckDuplicities(self):
         e2c = Events2Calendar()
-        msg = e2c.add_events(self.events, dryrun=True, calendarID=self.calendarID)
+        msg = e2c.add_events(self.events, dryrun=True, calendarId=self.calendarId)
         self.textoutput.setText(str(msg).decode('utf-8'))
 
     def showDialog(self):
@@ -146,23 +147,25 @@ class Events2Calendar():
         lid = []
         lsummary = []
         while True:
-          calendar_list = self.service.calendarList().list(pageToken=page_token).execute()
-          for calendar_list_entry in calendar_list['items']:
-              lid.append(calendar_list_entry['id'])
-              lsummary.append(calendar_list_entry['summary'])
-            print (calendar_list_entry['id'], '     ', calendar_list_entry['summary'])
-          page_token = calendar_list.get('nextPageToken')
-          if not page_token:
-            break
+            calendar_list = self.service.calendarList().list(pageToken=page_token).execute()
+            for calendar_list_entry in calendar_list['items']:
+                lid.append(calendar_list_entry['id'])
+                lsummary.append(calendar_list_entry['summary'])
+                print (calendar_list_entry['id'], '     ', calendar_list_entry['summary'])
+            page_token = calendar_list.get('nextPageToken')
+            if not page_token:
+                break
         return lid, lsummary
 
-    def add_events(self, events, calendarID='primary', dryrun=False):
+    def add_events(self, events, calendarId='primary', dryrun=False):
 
         msg1 = ''
         msg2 = ''
         for event in events:
 
-            duplicity, msgi = self.check_duplicity(event, calendarID=calendarID)
+            # print ('cal id')
+            # print (calendarId)
+            duplicity, msgi = self.check_duplicity(event, calendarId=calendarId)
 
             start = event['start'].get('dateTime', event['start'].get('date'))
             if duplicity:
@@ -170,7 +173,7 @@ class Events2Calendar():
             else:
                 if (not dryrun):
                     print ("adding to calendar")
-                    evnt = self.service.events().insert(calendarId=calendarID, body=event).execute()
+                    evnt = self.service.events().insert(calendarId=calendarId, body=event).execute()
                 msg1 = msg1 + 'Created: ' + start + ' ' + event['summary'] + '\n'
 
             msg2 = msg2 + msgi
