@@ -36,13 +36,22 @@ class Event2CalendarGUI(QtGui.QWidget):
         self.initUI()
 
     def initUI(self):
+        BUTTON_Y = 400
 
-        self.btn = QtGui.QPushButton('Process', self)
-        self.btn.move(20, 240)
+        self.btn = QtGui.QPushButton('Check text', self)
+        self.btn.move(20, BUTTON_Y)
         self.btn.clicked.connect(self.buttonProcess)
 
+        self.btn = QtGui.QPushButton('Check duplicities', self)
+        self.btn.move(220, BUTTON_Y)
+        self.btn.clicked.connect(self.buttonCheckDuplicities)
+
+        self.btn = QtGui.QPushButton('Add to calendar', self)
+        self.btn.move(420, BUTTON_Y)
+        self.btn.clicked.connect(self.buttonEvents2Calendar)
+
         self.btnQuit = QtGui.QPushButton('Quit', self)
-        self.btnQuit.move(200, 240)
+        self.btnQuit.move(620, BUTTON_Y)
         self.btnQuit.clicked.connect(self.buttonQuit)
         # self.le = QtGui.QTextEdit(self)
         # self.le.move(130, 22)
@@ -57,16 +66,33 @@ class Event2CalendarGUI(QtGui.QWidget):
 
         self.setGeometry(200, 200, 800, 500)
         self.setWindowTitle('Input dialog')
+
+        self.events = []
         self.show()
+
+
 
     def buttonQuit(self):
         QtCore.QCoreApplication.instance().quit()
 
     def buttonProcess(self):
-        text = self.le.toPlainText()
-        events = parse_text(str(text))
+        text = self.le.toPlainText().toUtf8()
+        text = str(text)
+        events = parse_text(text)
         self.textoutput.setText(str(events))
+        self.events = events
         # QtCore.QCoreApplication.instance().quit()
+
+    def buttonEvents2Calendar(self):
+        e2c = Events2Calendar()
+        msg = e2c.add_events(self.events, dryrun=False)
+        print (msg)
+        self.textoutput.setText(str(msg).decode('utf-8'))
+
+    def buttonCheckDuplicities(self):
+        e2c = Events2Calendar()
+        msg = e2c.add_events(self.events, dryrun=True)
+        self.textoutput.setText(str(msg).decode('utf-8'))
 
     def showDialog(self):
 
@@ -75,6 +101,82 @@ class Event2CalendarGUI(QtGui.QWidget):
 
         if ok:
             self.le.setText(str(text))
+
+class Events2Calendar():
+    def __init__(self):
+        self.init_calendar()
+
+    def init_calendar(self):
+
+        credentials = get_credentials()
+        http = credentials.authorize(httplib2.Http())
+        service = discovery.build('calendar', 'v3', http=http)
+
+        self.credentials = credentials
+        self.service = service
+
+    def add_events(self, events, dryrun=False):
+
+        msg1 = ''
+        msg2 = ''
+        for event in events:
+
+            duplicity, msgi = self.check_duplicity(event)
+
+            start = event['start'].get('dateTime', event['start'].get('date'))
+            if duplicity:
+                msg1 = msg1 + 'Event skipped: ' + start + ' ' + event['summary']
+            else:
+                if (not dryrun):
+                    print ("adding to calendar")
+                    evnt = self.service.events().insert(calendarId='primary', body=event).execute()
+                msg1 = msg1 + 'Event created: ' + start + ' ' + event['summary']
+
+            msg2 = msg2 + msgi
+
+        msg = msg1 + '\n\n' +  msg2
+        return msg
+
+    def check_duplicity(self, event):
+        msg = ''
+        retval = False
+
+        start_dt, end_dt = self.event_time(event)
+
+        eventsResult = self.service.events().list(
+            calendarId='primary', timeMin=start_dt, timeMax=end_dt,
+            # timeZone=tz,
+            maxResults=10, singleEvents=True,
+            orderBy='startTime').execute()
+        events = eventsResult.get('items', [])
+
+        if not events:
+            print('No upcoming events found.')
+            return False, ''
+        for eventi in events:
+            msgprefix = ''
+            start = eventi['start'].get('dateTime', eventi['start'].get('date'))
+            if eventi['summary'] == event['summary']:
+                msgprefix = 'Duplicity found: '
+                retval = True
+
+            msg = msg + msgprefix + str(start) + ' '
+            msg = msg + str(eventi['summary'].encode('utf8')) + '\n'
+            # print(start, event['summary'])
+
+        return retval, msg
+        # print (events)
+
+    def event_time(self, event):
+        # start_dt = datetime.datetime.strptime(event['start']['dateTime'], "%Y-%m-%dT%H:%M:%S")
+        # end_dt = datetime.datetime.strptime(event['end']['dateTime'], "%Y-%m-%dT%H:%M:%S")
+        start_dt = event['start']['dateTime']
+        end_dt = event['end']['dateTime']
+        # tz = event['end']['timeZone']
+
+        return start_dt, end_dt#, tz
+
+
 
 
 def get_credentials():
@@ -138,39 +240,8 @@ def create_event(service):
 
     event = service.events().insert(calendarId='primary', body=event).execute()
 
-def create_event_all(service):
-    event = {
-    'summary': 'Google I/O 2015',
-    'location': '800 Howard St., San Francisco, CA 94103',
-    'description': 'A chance to hear more about Google\'s developer products.',
-    'start': {
-        'dateTime': '2016-03-28T09:00:00-07:00',
-        'timeZone': 'America/Los_Angeles',
-    },
-    'end': {
-        'dateTime': '2016-03-28T17:00:00-07:00',
-        'timeZone': 'America/Los_Angeles',
-    },
-    'recurrence': [
-        'RRULE:FREQ=DAILY;COUNT=2'
-    ],
-    'attendees': [
-        {'email': 'lpage@example.com'},
-        {'email': 'sbrin@example.com'},
-    ],
-    'reminders': {
-        'useDefault': False,
-        'overrides': [
-        {'method': 'email', 'minutes': 24 * 60},
-        {'method': 'popup', 'minutes': 10},
-        ],
-    },
-    }
 
-    event = service.events().insert(calendarId='primary', body=event).execute()
-    # print 'Event created: %s' % (event.get('htmlLink'))
-
-def parse_line(linetext):
+def parse_line(linetext, summaryprefix=''):
     """
     Nalezne na radce datum a cas. zbytek je povazovan za sumary
     Args:
@@ -181,18 +252,13 @@ def parse_line(linetext):
     """
     import re
     import dateparser
+    import datetime
+    from pytz import timezone
+    tzprague = timezone('Europe/Prague')
+
 
     # pridej mezery vsude
-    linetext = re.sub(r'\.', r'. ', linetext)
-    # datum s teckami
-    datere = r'\d{1,2}\. *\d{1,2}\.? *\d{0,4}'
-    out = re.search(datere, linetext)
-    if out is None:
-        return None
-    datum = out.group(0)
-    print (datum)
-
-    linetext = re.sub(datere, '', linetext)
+    # linetext = re.sub(r'\.', r'. ', linetext)
 
     timere = r'\d{1,2}:\d{2}'
 
@@ -204,33 +270,62 @@ def parse_line(linetext):
     else:
         cas = out.group(0)
 
+    # swap month and day and add spaces
+    linetext = re.sub(r'(\d{1,2})\. *(\d{1,2})\.? *(\d{0,4})', r'\2. \1. \3', linetext)
+    # datum s teckami
+    datere = r'\d{1,2}\. *\d{1,2}\.? *\d{0,4}'
+    out = re.search(datere, linetext)
+    if out is None:
+        return None
+    datum = out.group(0)
+    print (datum)
+
+    linetext = re.sub(datere, '', linetext)
+
+
     # print cas
 
     parsed = datum + " " + cas
     # print parsed
 
     dt = dateparser.parse(parsed)
+    dt = tzprague.localize(dt)
     # print dt
     # print linetext
     event = {
-        'sumary': linetext,
+        'summary': summaryprefix + ' ' + linetext,
         # 'description': 'A chance to hear more about Google\'s developer products.',
         'start': {
             'dateTime': dt.isoformat(),
+            'timeZone': 'Europe/Prague',
+        },
+        'end': {
+            'dateTime': (dt + datetime.timedelta(hours=1)).isoformat(),
+            'timeZone': 'Europe/Prague',
             # 'timeZone': 'America/Los_Angeles',
         },
+
 
     }
     return event
 
 def parse_text(text):
     events = []
+    summaryprefix = ''
+    print (text)
 
     for linetext in text.splitlines():
-        event = parse_line(linetext)
+        print (linetext)
+        event = parse_line(linetext, summaryprefix=summaryprefix)
         # print event
-        if event is not None:
+        if event is None:
+            # print ("toto je prazdny radek")
+            # print (linetext)
+            summaryprefix = linetext
+        else:
             events.append(event)
+            # this line is used as summaryprefix
+
 
     return events
 
