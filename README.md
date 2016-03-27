@@ -1,5 +1,14 @@
 # events2calendar
-add multiple events to google calendar
+add multiple events to google calendar. Czech data format is supported DD.MM.YYYY
+
+Input text example:
+
+    prefix zprávy (bude přidán ke všem popisům událostí)
+    2.6. schůzka s MT
+    3.7. 2016 v 18:30 valná hromada
+    schuze bude v 16:30, 23.7.2016
+        
+        
 
 
 You will need
