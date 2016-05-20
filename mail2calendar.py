@@ -165,16 +165,19 @@ class Events2Calendar():
 
             # print ('cal id')
             # print (calendarId)
-            duplicity, msgi = self.check_duplicity(event, calendarId=calendarId)
+            duplicity, msgi, collision_event_summary = self.check_duplicity(event, calendarId=calendarId)
 
             start = event['start'].get('dateTime', event['start'].get('date'))
-            if duplicity:
-                msg1 = msg1 + 'Skipped: ' + start + ' ' + event['summary'] + '\n'
+            if duplicity == 'full':
+                msg1 = msg1 + 'Skipped: ' + start + ' ' + event['summary'] + '\n\n'
             else:
                 if (not dryrun):
                     print ("adding to calendar")
                     evnt = self.service.events().insert(calendarId=calendarId, body=event).execute()
-                msg1 = msg1 + 'Created: ' + start + ' ' + event['summary'] + '\n'
+                if duplicity == 'particular':
+                    msg1 = msg1 + 'Created (with collision): ' + start + ' ' + event['summary'] + '\nCollision: ' + collision_event_summary + '\n\n'
+                else:
+                    msg1 = msg1 + 'Created: ' + start + ' ' + event['summary'] + '\n\n'
 
             msg2 = msg2 + msgi
 
@@ -183,9 +186,14 @@ class Events2Calendar():
 
     def check_duplicity(self, event, calendarId='primary'):
         msg = ''
-        retval = False
+        retval = 'no'
+        eventisum = ''
+
+        esummary = str(event['summary'].decode('utf8').encode('utf8'))
+        print ("Checked event: " + esummary)
 
         start_dt, end_dt = self.event_time(event)
+        print (start_dt)
 
         eventsResult = self.service.events().list(
             calendarId=calendarId, timeMin=start_dt, timeMax=end_dt,
@@ -196,19 +204,25 @@ class Events2Calendar():
 
         if not events:
             print('No upcoming events found.')
-            return False, ''
+            return False, '', ''
         for eventi in events:
             msgprefix = ''
             start = eventi['start'].get('dateTime', eventi['start'].get('date'))
-            if eventi['summary'] == event['summary']:
+            eisummary = str(eventi['summary'].encode('utf8'))
+            print (eisummary)
+            if esummary == eisummary:
                 msgprefix = 'Duplicity found: '
-                retval = True
+                retval = "full"
+            else:
+                retval = 'particular'
+                eventisum = str(eventi['summary'].encode('utf8'))
+
 
             msg = msg + msgprefix + str(start) + ' '
             msg = msg + str(eventi['summary'].encode('utf8')) + '\n'
             # print(start, event['summary'])
 
-        return retval, msg
+        return retval, msg, eventisum
         # print (events)
 
     def event_time(self, event):

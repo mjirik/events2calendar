@@ -22,4 +22,9 @@ See
 
 https://developers.google.com/google-apps/calendar/quickstart/python
 
+Additional libraries
+
+        conda install -c ioos httplib2
+        pip install dateparser
+
 
