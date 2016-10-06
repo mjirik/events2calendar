@@ -17,6 +17,7 @@ try:
     flags = argparse.ArgumentParser(parents=[tools.argparser]).parse_args()
 except ImportError:
     flags = None
+import re
 
 # If modifying these scopes, delete your previously saved credentials
 # at ~/.credentials/calendar-python-quickstart.json
@@ -34,6 +35,7 @@ class Event2CalendarGUI(QtGui.QWidget):
         super(Event2CalendarGUI, self).__init__()
         self.e2c = None
         self.initUI()
+        self._text_changed_and_events_not_updated = True
 
     def initUI(self):
         BUTTON_Y = 435
@@ -76,6 +78,10 @@ class Event2CalendarGUI(QtGui.QWidget):
         self.le = QtGui.QTextEdit(self)
         self.le.setMinimumSize(400,400)
         self.le.move(20, 22)
+        self.le.textChanged.connect(self.__text_is_changed)
+        self.le.setText("one line summary prefix to all fallowing events\n1.1. event\nevent 2 2.1.2016 13:00")
+        self.le.selectAll()
+        self.le.setFocus()
 
         self.textoutput = QtGui.QTextEdit(self)
         self.textoutput.move(440, 22)
@@ -89,6 +95,10 @@ class Event2CalendarGUI(QtGui.QWidget):
 
         self.events = []
         self.show()
+
+
+    def __text_is_changed(self):
+        self._text_changed_and_events_not_updated = True
 
     def __create_combobox(self):
 
@@ -124,6 +134,12 @@ class Event2CalendarGUI(QtGui.QWidget):
     def __update_events(self):
         self.__update_events_parse_text()
         self.__update_events_check_duplicities()
+        self._text_changed_and_events_not_updated = False
+
+    def __update_events_if_necessary(self):
+        if self._text_changed_and_events_not_updated is True:
+            self.__update_events()
+
 
     def __update_events_parse_text(self):
         text = self.le.toPlainText().toUtf8()
@@ -136,31 +152,39 @@ class Event2CalendarGUI(QtGui.QWidget):
         msg = self.e2c.update_events_for_duplicity(self.events, dryrun=True, calendarId=self.calendarId)
 
     def buttonNext(self):
-
         self.event_i += 1
         if self.event_i >= len(self.events):
             self.event_i = 0
         self.__show_event_i()
 
     def buttonPrev(self):
-
         self.event_i -= 1
         if self.event_i < 0:
             self.event_i = len(self.events) - 1
         self.__show_event_i()
 
     def __show_event_i(self):
-        if self.event_i == 0:
-            self.__update_events()
+        import copy
+        self.__update_events_if_necessary()
         if len(self.events) > 0:
-            self.textoutput.setText(
+            input_text = copy.copy(self.events[self.event_i]['input text'])
+            # self.textoutput.setText(
+            self.textoutput.setHtml(
                 str(
-                    str(self.event_i) + '\n' +
-                    self.events[self.event_i]['input text'] + '\n' +
-                    self.events[self.event_i]['status'] + '\n\n' +
-                    self.events[self.event_i]['msg'] + '\n' +
-                    self.events[self.event_i]['msg_collision'] + '\n'
+                    "" + str(self.event_i) + '<br></br>\n' +
+                    "" + input_text + '<br></br>\n' +
+                    "<b>" + self.events[self.event_i]['status'] + '</b><br></br><br></br>\n\n' +
+                    "" + self.events[self.event_i]['msg'] + '<br></br>\n' +
+                    "<b>" + self.events[self.event_i]['msg_collision'] + '</b><br></br>\n'
                 ).decode('utf-8'))
+            # make processed line bold
+            text = str(self.le.toPlainText().toUtf8())
+            print (text)
+            html_text = re.compile('(' + str(input_text) + ")").sub(r"<b>\1</b>", text)
+            print (html_text)
+            html_text = re.compile(r'\n').sub(r"<br></br>\n", html_text)
+            print (html_text)
+            self.le.setHtml(html_text)
 
     def buttonAdd(self):
         self.e2c.insert_event(
