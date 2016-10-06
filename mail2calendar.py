@@ -32,32 +32,46 @@ class Event2CalendarGUI(QtGui.QWidget):
 
     def __init__(self):
         super(Event2CalendarGUI, self).__init__()
-
+        self.e2c = None
         self.initUI()
 
     def initUI(self):
-        BUTTON_Y = 450
+        BUTTON_Y = 435
 
         self.BUTTON_Y = BUTTON_Y
         self.calendarId = 'primary'
+        self.event_i = -1
 
-        self.btn = QtGui.QPushButton('Check text', self)
+        self.btn = QtGui.QPushButton('Debug parser', self)
         self.btn.move(300, BUTTON_Y)
-        self.btn.clicked.connect(self.buttonProcess)
+        self.btn.clicked.connect(self.buttonCheck)
 
-        self.btn = QtGui.QPushButton('Check duplicities', self)
-        self.btn.move(450, BUTTON_Y)
+        self.btn = QtGui.QPushButton('Debug duplicities', self)
+        self.btn.move(500, BUTTON_Y)
         self.btn.clicked.connect(self.buttonCheckDuplicities)
 
-        self.btn = QtGui.QPushButton('Add to calendar', self)
-        self.btn.move(600, BUTTON_Y)
+        self.btn = QtGui.QPushButton('Add all', self)
+        self.btn.move(600, BUTTON_Y + 30)
         self.btn.clicked.connect(self.buttonEvents2Calendar)
 
         self.btnQuit = QtGui.QPushButton('Quit', self)
-        self.btnQuit.move(750, BUTTON_Y)
+        self.btnQuit.move(750, BUTTON_Y + 30)
         self.btnQuit.clicked.connect(self.buttonQuit)
         # self.le = QtGui.QTextEdit(self)
         # self.le.move(130, 22)
+
+        self.btn = QtGui.QPushButton('<', self)
+        self.btn.move(300, BUTTON_Y + 30)
+        self.btn.clicked.connect(self.buttonPrev)
+
+        self.btn = QtGui.QPushButton('>', self)
+        self.btn.move(400, BUTTON_Y + 30)
+        self.btn.clicked.connect(self.buttonNext)
+
+
+        self.btn = QtGui.QPushButton('Add', self)
+        self.btn.move(500, BUTTON_Y + 30)
+        self.btn.clicked.connect(self.buttonAdd)
 
         self.le = QtGui.QTextEdit(self)
         self.le.setMinimumSize(400,400)
@@ -101,23 +115,68 @@ class Event2CalendarGUI(QtGui.QWidget):
     def buttonQuit(self):
         QtCore.QCoreApplication.instance().quit()
 
-    def buttonProcess(self):
+    def buttonCheck(self):
+        self.__update_events_parse_text()
+        self.textoutput.setText(str(self.events).decode('utf-8'))
+        self.events = self.events
+        # QtCore.QCoreApplication.instance().quit()
+
+    def __update_events(self):
+        self.__update_events_parse_text()
+        self.__update_events_check_duplicities()
+
+    def __update_events_parse_text(self):
         text = self.le.toPlainText().toUtf8()
         text = str(text)
-        events = parse_text(text)
-        self.textoutput.setText(str(events).decode('utf-8'))
-        self.events = events
-        # QtCore.QCoreApplication.instance().quit()
+        self.events = parse_text(text)
+
+    def __update_events_check_duplicities(self):
+        if self.e2c is None:
+            self.e2c = Events2Calendar()
+        msg = self.e2c.update_events_for_duplicity(self.events, dryrun=True, calendarId=self.calendarId)
+
+    def buttonNext(self):
+
+        self.event_i += 1
+        if self.event_i >= len(self.events):
+            self.event_i = 0
+        self.__show_event_i()
+
+    def buttonPrev(self):
+
+        self.event_i -= 1
+        if self.event_i < 0:
+            self.event_i = len(self.events) - 1
+        self.__show_event_i()
+
+    def __show_event_i(self):
+        if self.event_i == 0:
+            self.__update_events()
+        if len(self.events) > 0:
+            self.textoutput.setText(
+                str(
+                    str(self.event_i) + '\n' +
+                    self.events[self.event_i]['input text'] + '\n' +
+                    self.events[self.event_i]['status'] + '\n\n' +
+                    self.events[self.event_i]['msg'] + '\n' +
+                    self.events[self.event_i]['msg_collision'] + '\n'
+                ).decode('utf-8'))
+
+    def buttonAdd(self):
+        self.e2c.insert_event(
+            self.calendarId,
+            self.events[self.event_i]['new event']
+        )
 
     def buttonEvents2Calendar(self):
         e2c = Events2Calendar()
-        msg = e2c.add_events(self.events, dryrun=False, calendarId=self.calendarId)
+        msg = e2c.update_events_for_duplicity(self.events, dryrun=False, calendarId=self.calendarId)
         print (msg)
         self.textoutput.setText(str(msg).decode('utf-8'))
 
     def buttonCheckDuplicities(self):
         e2c = Events2Calendar()
-        msg = e2c.add_events(self.events, dryrun=True, calendarId=self.calendarId)
+        msg = e2c.update_events_for_duplicity(self.events, dryrun=True, calendarId=self.calendarId)
         self.textoutput.setText(str(msg).decode('utf-8'))
 
     def showDialog(self):
@@ -157,32 +216,61 @@ class Events2Calendar():
                 break
         return lid, lsummary
 
-    def add_events(self, events, calendarId='primary', dryrun=False):
+    def update_events_for_duplicity(self, events, calendarId='primary', dryrun=False):
 
-        msg1 = ''
-        msg2 = ''
-        for event in events:
+        for meta_event in events:
+            new_event = meta_event['new event']
 
             # print ('cal id')
             # print (calendarId)
-            duplicity, msgi, collision_event_summary = self.check_duplicity(event, calendarId=calendarId)
+            duplicity, msgi, collision_event_summary = self.check_duplicity(new_event, calendarId=calendarId)
+            meta_event['duplicity'] = duplicity
+            meta_event['msgi'] = msgi
+            meta_event['collision_event_summary'] = collision_event_summary
 
-            start = event['start'].get('dateTime', event['start'].get('date'))
+        self.__create_events_messages(events, calendarId=calendarId, dryrun=dryrun)
+
+    def __create_events_messages(self, events, calendarId='primary', dryrun=False):
+        msg1 = ''
+        msg2 = ''
+        for meta_event in events:
+            new_event = meta_event['new event']
+            duplicity = meta_event['duplicity']
+            msgi = meta_event['msgi']
+            collision_event_summary = meta_event['collision_event_summary']
+
+
+            start = new_event['start'].get('dateTime', new_event['start'].get('date'))
+            msg_event = ''
+            msg_collision = ''
             if duplicity == 'full':
-                msg1 = msg1 + 'Skipped: ' + start + ' ' + event['summary'] + '\n\n'
+                msg_event = start + ' ' + new_event['summary'] + '\n\n'
+                msg_status = 'Skipped'
             else:
                 if (not dryrun):
                     print ("adding to calendar")
-                    evnt = self.service.events().insert(calendarId=calendarId, body=event).execute()
+                    self.insert_event(calendarId, new_event)
                 if duplicity == 'particular':
-                    msg1 = msg1 + 'Created (with collision): ' + start + ' ' + event['summary'] + '\nCollision: ' + collision_event_summary + '\n\n'
+                    msg_status = 'Created (with collision)'
+                    msg_event = start + ' ' + new_event['summary']
+                    msg_collision = '\nCollision: ' + collision_event_summary + '\n\n'
                 else:
-                    msg1 = msg1 + 'Created: ' + start + ' ' + event['summary'] + '\n\n'
+                    msg_status = 'Created: '
+                    msg_event = start + ' ' + new_event['summary'] + '\n\n'
+            meta_event['msg'] = msg_event
+            meta_event['status'] = msg_status
+            meta_event['msg_collision'] = msg_collision
+
+            msg1 = msg1 + msg_status + ": " + msg_event
 
             msg2 = msg2 + msgi
 
         msg = msg1 + '\nEvents in calendar\n\n' +  msg2
         return msg
+
+    def insert_event(self, calendarId, new_event):
+        evnt = self.service.events().insert(calendarId=calendarId, body=new_event).execute()
+
 
     def check_duplicity(self, event, calendarId='primary'):
         msg = ''
@@ -383,7 +471,7 @@ def parse_text(text):
             # print (linetext)
             summaryprefix = linetext
         else:
-            events.append(event)
+            events.append({'new event': event, 'input text': linetext, 'summaryprefix':summaryprefix})
             # this line is used as summaryprefix
 
 
