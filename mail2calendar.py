@@ -75,13 +75,13 @@ class Event2CalendarGUI(QtGui.QWidget):
         self.btn.move(500, BUTTON_Y + 30)
         self.btn.clicked.connect(self.buttonAdd)
 
-        self.le = QtGui.QTextEdit(self)
-        self.le.setMinimumSize(400,400)
-        self.le.move(20, 22)
-        self.le.textChanged.connect(self.__text_is_changed)
-        self.le.setText("one line summary prefix to all fallowing events\n1.1. event\nevent 2 2.1.2016 13:00")
-        self.le.selectAll()
-        self.le.setFocus()
+        self.input_textbox = QtGui.QTextEdit(self)
+        self.input_textbox.setMinimumSize(400, 400)
+        self.input_textbox.move(20, 22)
+        self.input_textbox.textChanged.connect(self.__text_is_changed)
+        self.input_textbox.setText("one line summary prefix to all fallowing events\n1.1. event\nevent 2 2.1.2016 13:00")
+        self.input_textbox.selectAll()
+        self.input_textbox.setFocus()
 
         self.textoutput = QtGui.QTextEdit(self)
         self.textoutput.move(440, 22)
@@ -142,7 +142,7 @@ class Event2CalendarGUI(QtGui.QWidget):
 
 
     def __update_events_parse_text(self):
-        text = self.le.toPlainText().toUtf8()
+        text = self.input_textbox.toPlainText().toUtf8()
         text = str(text)
         self.events = parse_text(text)
 
@@ -178,13 +178,13 @@ class Event2CalendarGUI(QtGui.QWidget):
                     "<b>" + self.events[self.event_i]['msg_collision'] + '</b><br></br>\n'
                 ).decode('utf-8'))
             # make processed line bold
-            text = str(self.le.toPlainText().toUtf8())
+            text = str(self.input_textbox.toPlainText().toUtf8()).decode("utf8")
             print (text)
             html_text = re.compile('(' + str(input_text) + ")").sub(r"<b>\1</b>", text)
             print (html_text)
             html_text = re.compile(r'\n').sub(r"<br></br>\n", html_text)
             print (html_text)
-            self.le.setHtml(html_text)
+            self.input_textbox.setHtml(html_text)
 
     def buttonAdd(self):
         self.e2c.insert_event(
@@ -209,7 +209,7 @@ class Event2CalendarGUI(QtGui.QWidget):
             'Enter your name:')
 
         if ok:
-            self.le.setText(str(text))
+            self.input_textbox.setText(str(text))
 
 class Events2Calendar():
     def __init__(self):
