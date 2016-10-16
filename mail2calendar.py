@@ -411,7 +411,7 @@ def create_event(service):
     event = service.events().insert(calendarId='primary', body=event).execute()
 
 
-def parse_line(linetext, summaryprefix=''):
+def parse_line(linetext, summaryprefix='', prev_line_date=""):
     """
     Nalezne na radce datum a cas. zbytek je povazovan za sumary
     Args:
@@ -432,33 +432,42 @@ def parse_line(linetext, summaryprefix=''):
     # remove multiple spaces
     linetext = re.sub(r' +', r' ', linetext)
 
-    timere = r'v? ?\d{1,2}:\d{2}'
+    timere = r' ?\d{1,2}:\d{2}'
 
-    out = re.search(timere, linetext)
+    out_time = re.search(timere, linetext)
 
     linetext = re.sub(timere, '', linetext, 1)
-    if out is None:
+    if out_time is None:
         cas = ''
     else:
-        cas = out.group(0)
+        cas = out_time.group(0)
 
     # swap month and day and add spaces
     linetext = re.sub(r'(\d{1,2})\. *(\d{1,2})\.? *(\d{0,4})', r'\2. \1. \3', linetext)
+    print ("date after day-month swap")
+    print (linetext)
+    print("================")
     # datum s teckami
     datere = r'\d{1,2}\. *\d{1,2}\.? *\d{0,4}'
-    out = re.search(datere, linetext)
-    if out is None:
-        return None
-    datum = out.group(0)
+    out_date = re.search(datere, linetext)
+    
+    if out_date is None:
+        if out_time is None:
+            return None, ""
+        else:
+            datum = prev_line_date
+    else:
+        datum = out_date.group(0)
     print (datum)
 
+    prev_line_date = datum
     linetext = re.sub(datere, '', linetext)
 
 
     # print cas
 
     parsed = datum + " " + cas
-    # print parsed
+    print (parsed)
 
     dt = dateparser.parse(parsed)
     dt = tzprague.localize(dt)
@@ -479,16 +488,17 @@ def parse_line(linetext, summaryprefix=''):
 
 
     }
-    return event
+    return event, prev_line_date
 
 def parse_text(text):
     events = []
     summaryprefix = ''
+    prev_line_date = ""
     print (text)
 
     for linetext in text.splitlines():
         print (linetext)
-        event = parse_line(linetext, summaryprefix=summaryprefix)
+        event, prev_line_date = parse_line(linetext, summaryprefix=summaryprefix, prev_line_date=prev_line_date)
         # print event
         if event is None:
             # print ("toto je prazdny radek")
