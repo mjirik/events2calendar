@@ -436,7 +436,7 @@ def parse_line(linetext, summaryprefix=''):
 
     out = re.search(timere, linetext)
 
-    linetext = re.sub(timere, '', linetext)
+    linetext = re.sub(timere, '', linetext, 1)
     if out is None:
         cas = ''
     else:
