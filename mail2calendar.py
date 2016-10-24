@@ -1,5 +1,7 @@
-
+# -*- coding: utf-8 -*-
 from __future__ import print_function
+import logging
+logger = logging.getLogger(__name__)
 import httplib2
 import os
 
@@ -18,6 +20,7 @@ try:
 except ImportError:
     flags = None
 import re
+import copy
 
 # If modifying these scopes, delete your previously saved credentials
 # at ~/.credentials/calendar-python-quickstart.json
@@ -33,7 +36,9 @@ class Event2CalendarGUI(QtGui.QWidget):
 
     def __init__(self):
         super(Event2CalendarGUI, self).__init__()
-        self.e2c = None
+        # self.e2c = None
+        self.e2c = Events2Calendar()
+        self.mevents = self.e2c.mevents
         self.initUI()
         self._text_changed_and_events_not_updated = True
 
@@ -93,8 +98,8 @@ class Event2CalendarGUI(QtGui.QWidget):
         self.setWindowTitle('Event2Calendar')
         self.__create_combobox()
 
-        self.events = []
         self.show()
+
 
 
     def __text_is_changed(self):
@@ -102,8 +107,7 @@ class Event2CalendarGUI(QtGui.QWidget):
 
     def __create_combobox(self):
 
-        e2c = Events2Calendar()
-        lid, lsummary = e2c.calendars_list()
+        lid, lsummary = self.e2c.calendars_list()
         self.calendarsId = lid
         self.calendarsSummary = lsummary
         comboBox = QtGui.QComboBox(self)
@@ -127,8 +131,8 @@ class Event2CalendarGUI(QtGui.QWidget):
 
     def buttonCheck(self):
         self.__update_events_parse_text()
-        self.textoutput.setText(str(self.events).decode('utf-8'))
-        self.events = self.events
+        self.textoutput.setText(str(self.mevents).decode('utf-8'))
+        self.mevents = self.mevents
         # QtCore.QCoreApplication.instance().quit()
 
     def __update_events(self):
@@ -143,44 +147,81 @@ class Event2CalendarGUI(QtGui.QWidget):
 
     def __update_events_parse_text(self):
         text = self.input_textbox.toPlainText().toUtf8()
-        text = str(text)
-        self.events = parse_text(text)
+        text = str(text).decode("utf8")
+        self.mevents = self.e2c.parse_text(text)
 
     def __update_events_check_duplicities(self):
         if self.e2c is None:
             self.e2c = Events2Calendar()
-        msg = self.e2c.update_events_for_duplicity(self.events, dryrun=True, calendarId=self.calendarId)
+        msg = self.e2c.update_events_for_duplicity(self.mevents, dryrun=True, calendarId=self.calendarId)
 
     def buttonNext(self):
         self.event_i += 1
-        if self.event_i >= len(self.events):
+        if self.event_i >= len(self.mevents):
             self.event_i = 0
         self.__show_event_i()
 
     def buttonPrev(self):
         self.event_i -= 1
         if self.event_i < 0:
-            self.event_i = len(self.events) - 1
+            self.event_i = len(self.mevents) - 1
         self.__show_event_i()
+
+    def _format_event(self, event):
+        start = event['start'].get('dateTime', event['start'].get('date'))
+        dt = start.split("T")
+        # logger.debug("==== start")
+        # logger.debug(str(start))
+        # logger.debug(dt)
+        # logger.debug(eventi["start"])
+        # import ipdb; ipdb.set_trace()
+        eisummary = event['summary']
+        formated = "<b>" + str(dt[0]) + "</b><br></br>"
+        if len(dt) > 1:
+            formated += str(dt[1]) + "<br></br>"
+        formated += eisummary
+
+        return formated
+
+    def _format_colliding_events(self, event_i=None):
+        msg = ""
+        if event_i is None:
+            event_i = self.event_i
+        mevent = self.mevents[event_i]
+        for event in mevent["colliding events"]:
+            text = self._format_event(event)
+            msg = msg + "<br></br><br></br>" + text
+        return msg
+
 
     def __show_event_i(self):
         import copy
         self.__update_events_if_necessary()
-        if len(self.events) > 0:
-            input_text = copy.copy(self.events[self.event_i]['input text'])
+        if len(self.mevents) > 0:
+            input_text = copy.copy(self.mevents[self.event_i]['input text'])
             # self.textoutput.setText(
-            self.textoutput.setHtml(
-                str(
-                    "" + str(self.event_i) + '<br></br>\n' +
-                    "" + input_text + '<br></br>\n' +
-                    "<b>" + self.events[self.event_i]['status'] + '</b><br></br><br></br>\n\n' +
-                    "" + self.events[self.event_i]['msg'] + '<br></br>\n' +
-                    "<b>" + self.events[self.event_i]['msg_collision'] + '</b><br></br>\n'
-                ).decode('utf-8'))
+            html_textoutput = \
+                "" + str(self.event_i) + '<br></br>\n'\
+                + input_text + '<br></br>\n' \
+                + '<br></br>\n' \
+                + "<b>" + self.mevents[self.event_i]['status'] + '</b><br></br>\n\n' \
+                + "" + self._format_event(self.mevents[self.event_i]['new event']) + '<br></br><br></br>\n\n' \
+                + ""\
+                + "" + self._format_colliding_events(self.event_i) + '<br></br>\n'
+                # + "" + self.mevents[self.event_i]['msg'] + '<br></br>\n'
+                # "<b>" + self.mevents[self.event_i]['msg_collision'] + '</b><br></br>\n'
+                #.decode('utf-8')
+
+            self.textoutput.setHtml(html_textoutput)
             # make processed line bold
             text = str(self.input_textbox.toPlainText().toUtf8()).decode("utf8")
+            print (" --------")
             print (text)
-            html_text = re.compile('(' + str(input_text) + ")").sub(r"<b>\1</b>", text)
+            print (" ---")
+            print (input_text)
+            input_text.encode("utf8")
+            text.encode("utf8")
+            html_text = re.compile('(' + input_text.encode("utf8") + ")").sub(r"<b>\1</b>", text.encode("utf8")).decode("utf8")
             print (html_text)
             html_text = re.compile(r'\n').sub(r"<br></br>\n", html_text)
             print (html_text)
@@ -189,18 +230,16 @@ class Event2CalendarGUI(QtGui.QWidget):
     def buttonAdd(self):
         self.e2c.insert_event(
             self.calendarId,
-            self.events[self.event_i]['new event']
+            self.mevents[self.event_i]['new event']
         )
 
     def buttonEvents2Calendar(self):
-        e2c = Events2Calendar()
-        msg = e2c.update_events_for_duplicity(self.events, dryrun=False, calendarId=self.calendarId)
+        msg = self.e2c.update_events_for_duplicity(self.mevents, dryrun=False, calendarId=self.calendarId)
         print (msg)
         self.textoutput.setText(str(msg).decode('utf-8'))
 
     def buttonCheckDuplicities(self):
-        e2c = Events2Calendar()
-        msg = e2c.update_events_for_duplicity(self.events, dryrun=True, calendarId=self.calendarId)
+        msg = self.e2c.update_events_for_duplicity(self.mevents, dryrun=True, calendarId=self.calendarId)
         self.textoutput.setText(str(msg).decode('utf-8'))
 
     def showDialog(self):
@@ -214,6 +253,7 @@ class Event2CalendarGUI(QtGui.QWidget):
 class Events2Calendar():
     def __init__(self):
         self.init_calendar()
+        self.mevents = []
 
     def init_calendar(self):
 
@@ -224,6 +264,29 @@ class Events2Calendar():
         self.credentials = credentials
         self.service = service
 
+    def parse_text(self, text):
+
+        events = []
+        summaryprefix = ''
+        prev_line_date = ""
+        print (text)
+
+        for linetext in text.splitlines():
+            print (linetext)
+            # filtered_linetext = li
+            filtered_linetext = self.filter_text(copy.copy(linetext))
+            event, prev_line_date = parse_line(filtered_linetext, summaryprefix=summaryprefix, prev_line_date=prev_line_date)
+            # print event
+            if event is None:
+                # print ("toto je prazdny radek")
+                # print (linetext)
+                summaryprefix = linetext
+            else:
+                events.append({'new event': event, 'input text': linetext, 'summaryprefix':summaryprefix})
+                # this line is used as summaryprefix
+
+        self.mevents = events
+        return self.mevents
 
     def calendars_list(self):
         page_token = None
@@ -240,24 +303,38 @@ class Events2Calendar():
                 break
         return lid, lsummary
 
-    def update_events_for_duplicity(self, events, calendarId='primary', dryrun=False):
+    def update_events_for_duplicity(self, mevents, calendarId='primary', dryrun=False):
 
-        for meta_event in events:
+        for meta_event in mevents:
             new_event = meta_event['new event']
 
             # print ('cal id')
             # print (calendarId)
-            duplicity, msgi, collision_event_summary = self.check_duplicity(new_event, calendarId=calendarId)
+            duplicity, msgi, collision_event_summary, events = self.check_duplicity(new_event, calendarId=calendarId)
             meta_event['duplicity'] = duplicity
             meta_event['msgi'] = msgi
             meta_event['collision_event_summary'] = collision_event_summary
+            meta_event["colliding events"] = events
 
-        self.__create_events_messages(events, calendarId=calendarId, dryrun=dryrun)
+        self.__create_events_messages(mevents, calendarId=calendarId, dryrun=dryrun)
 
-    def __create_events_messages(self, events, calendarId='primary', dryrun=False):
+    def _format_event(self, event):
+        eventi = event["new event"]
+        start = eventi['start'].get('dateTime', eventi['start'].get('date'))
+        # dt = start.split("T")
+        # logger.debug("==== start")
+        # logger.debug(str(start))
+        # logger.debug(dt)
+        # logger.debug(eventi["start"])
+        # import ipdb; ipdb.set_trace()
+        eisummary = str(eventi['summary'].encode('utf8'))
+        formated = str(start) + "\n" + eisummary
+        return formated
+
+    def __create_events_messages(self, mevents, calendarId='primary', dryrun=False):
         msg1 = ''
         msg2 = ''
-        for meta_event in events:
+        for meta_event in mevents:
             new_event = meta_event['new event']
             duplicity = meta_event['duplicity']
             msgi = meta_event['msgi']
@@ -287,7 +364,7 @@ class Events2Calendar():
 
             msg1 = msg1 + msg_status + ": " + msg_event
 
-            msg2 = msg2 + msgi
+            msg2 = msg2 + msgi # .decode("utf8")
 
         msg = msg1 + '\nEvents in calendar\n\n' +  msg2
         return msg
@@ -299,10 +376,10 @@ class Events2Calendar():
     def check_duplicity(self, event, calendarId='primary'):
         msg = ''
         retval = 'no'
-        eventisum = ''
+        eventisum_utf8 = ''
 
-        esummary = str(event['summary'].decode('utf8').encode('utf8'))
-        print ("Checked event: " + esummary)
+        esummary_utf8 = event['summary'].encode('utf8')
+        print ("Checked event: " + esummary_utf8)
 
         start_dt, end_dt = self.event_time(event)
         print (start_dt)
@@ -316,25 +393,27 @@ class Events2Calendar():
 
         if not events:
             print('No upcoming events found.')
-            return False, '', ''
+            return False, '', '', events
         for eventi in events:
+            summary_utf8 = eventi["summary"].encode("utf8")
             msgprefix = ''
             start = eventi['start'].get('dateTime', eventi['start'].get('date'))
-            eisummary = str(eventi['summary'].encode('utf8'))
+            eisummary = summary_utf8
+            # eisummary = str(eventi['summary'].encode('utf8'))
             print (eisummary)
-            if esummary == eisummary:
+            if esummary_utf8 == eisummary:
                 msgprefix = 'Duplicity found: '
                 retval = "full"
             else:
                 retval = 'particular'
-                eventisum = str(eventi['summary'].encode('utf8'))
+                eventisum_utf8 = summary_utf8
 
 
             msg = msg + msgprefix + str(start) + ' '
-            msg = msg + str(eventi['summary'].encode('utf8')) + '\n'
+            msg = msg + summary_utf8 + '\n'
             # print(start, event['summary'])
 
-        return retval, msg, eventisum
+        return retval, msg.decode("utf8"), eventisum_utf8.decode("utf8"), events
         # print (events)
 
     def event_time(self, event):
@@ -345,6 +424,24 @@ class Events2Calendar():
         # tz = event['end']['timeZone']
 
         return start_dt, end_dt#, tz
+
+    def filter_text(self, text):
+        self.text_filters = [
+            "\\bpo\\b\\.?",
+            "\\bút\\b\\.?",
+            "\\but\\b\\.?",
+            "\\bst\\b\\.?",
+            "\\bčt\\b\\.?",
+            "\\bct\\b\\.?",
+            "\\bpá\\b\\.?",
+            "\\bpa\\b\\.?",
+            "\\bso\\b\\.?",
+            "\\bne\\b\\.?",
+        ]
+        for text_filter in self.text_filters:
+            text = re.sub(text_filter, "", text, flags=re.IGNORECASE)
+        return text
+
 
 
 
@@ -489,27 +586,6 @@ def parse_line(linetext, summaryprefix='', prev_line_date=""):
 
     }
     return event, prev_line_date
-
-def parse_text(text):
-    events = []
-    summaryprefix = ''
-    prev_line_date = ""
-    print (text)
-
-    for linetext in text.splitlines():
-        print (linetext)
-        event, prev_line_date = parse_line(linetext, summaryprefix=summaryprefix, prev_line_date=prev_line_date)
-        # print event
-        if event is None:
-            # print ("toto je prazdny radek")
-            # print (linetext)
-            summaryprefix = linetext
-        else:
-            events.append({'new event': event, 'input text': linetext, 'summaryprefix':summaryprefix})
-            # this line is used as summaryprefix
-
-
-    return events
 
 def calendar_processing():
     """Shows basic usage of the Google Calendar API.
