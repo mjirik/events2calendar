@@ -11,6 +11,7 @@ from oauth2client import client
 from oauth2client import tools
 
 import datetime
+import dateutil.parser
 from PyQt4 import QtGui, QtCore
 import sys
 
@@ -84,7 +85,7 @@ class Event2CalendarGUI(QtGui.QWidget):
         self.input_textbox.setMinimumSize(400, 400)
         self.input_textbox.move(20, 22)
         self.input_textbox.textChanged.connect(self.__text_is_changed)
-        self.input_textbox.setText("one line summary prefix to all fallowing events\n1.1. event\nevent 2 2.1.2016 13:00")
+        self.input_textbox.setText("one line summary prefix to all fallowing events\n1.1. new year event\nsecond day event 2.1.2016 13:00 do 13:15")
         self.input_textbox.selectAll()
         self.input_textbox.setFocus()
 
@@ -131,7 +132,10 @@ class Event2CalendarGUI(QtGui.QWidget):
 
     def buttonCheck(self):
         self.__update_events_parse_text()
-        self.textoutput.setText(str(self.mevents).decode('utf-8'))
+        if sys.version_info.major == 2:
+            self.textoutput.setText(str(self.mevents).decode('utf-8'))
+        else:
+            self.textoutput.setText(str(self.mevents))
         self.mevents = self.mevents
         # QtCore.QCoreApplication.instance().quit()
 
@@ -146,8 +150,11 @@ class Event2CalendarGUI(QtGui.QWidget):
 
 
     def __update_events_parse_text(self):
-        text = self.input_textbox.toPlainText().toUtf8()
-        text = str(text).decode("utf8")
+        if sys.version_info.major == 2:
+            text = self.input_textbox.toPlainText().toUtf8()
+            text = str(text).decode("utf8")
+        else:
+            text = self.input_textbox.toPlainText()
         self.mevents = self.e2c.parse_text(text)
 
     def __update_events_check_duplicities(self):
@@ -168,19 +175,23 @@ class Event2CalendarGUI(QtGui.QWidget):
         self.__show_event_i()
 
     def _format_event(self, event):
+        # start
         start = event['start'].get('dateTime', event['start'].get('date'))
         dt = start.split("T")
-        # logger.debug("==== start")
-        # logger.debug(str(start))
-        # logger.debug(dt)
-        # logger.debug(eventi["start"])
-        # import ipdb; ipdb.set_trace()
         eisummary = event['summary']
         formated = "<b>" + str(dt[0]) + "</b><br></br>"
         if len(dt) > 1:
-            formated += str(dt[1]) + "<br></br>"
-        formated += eisummary
+            formated += str(dt[1]) + " "
 
+        # end
+        dt_end = event['end'].get('dateTime', event['end'].get('date'))
+        dt = dt_end.split("T")
+        # formated += "<b>" + str(dt[0]) + "</b><br></br>"
+        if len(dt) > 1:
+            formated += str(dt[1])
+
+        # summary
+        formated += "<br></br>" + eisummary
         return formated
 
     def _format_colliding_events(self, event_i=None):
@@ -214,14 +225,20 @@ class Event2CalendarGUI(QtGui.QWidget):
 
             self.textoutput.setHtml(html_textoutput)
             # make processed line bold
-            text = str(self.input_textbox.toPlainText().toUtf8()).decode("utf8")
+            if sys.version_info.major == 2:
+                text = str(self.input_textbox.toPlainText().toUtf8()).decode("utf8")
+            else:
+                text = str(self.input_textbox.toPlainText())
             print (" --------")
             print (text)
             print (" ---")
             print (input_text)
             input_text.encode("utf8")
             text.encode("utf8")
-            html_text = re.compile('(' + input_text.encode("utf8") + ")").sub(r"<b>\1</b>", text.encode("utf8")).decode("utf8")
+            if sys.version_info.major == 2:
+                html_text = re.compile('(' + input_text.encode("utf8") + ")").sub(r"<b>\1</b>", text.encode("utf8")).decode("utf8")
+            else:
+                html_text = re.compile('(' + input_text + ")").sub(r"<b>\1</b>", text)
             print (html_text)
             html_text = re.compile(r'\n').sub(r"<br></br>\n", html_text)
             print (html_text)
@@ -236,11 +253,17 @@ class Event2CalendarGUI(QtGui.QWidget):
     def buttonEvents2Calendar(self):
         msg = self.e2c.update_events_for_duplicity(self.mevents, dryrun=False, calendarId=self.calendarId)
         print (msg)
-        self.textoutput.setText(str(msg).decode('utf-8'))
+        if sys.version_info.major == 2:
+            self.textoutput.setText(str(msg).decode('utf-8'))
+        else:
+            self.textoutput.setText(str(msg))
 
     def buttonCheckDuplicities(self):
         msg = self.e2c.update_events_for_duplicity(self.mevents, dryrun=True, calendarId=self.calendarId)
-        self.textoutput.setText(str(msg).decode('utf-8'))
+        if sys.version_info.major == 2:
+            self.textoutput.setText(str(msg).decode('utf-8'))
+        else:
+            self.textoutput.setText(str(msg))
 
     def showDialog(self):
 
@@ -275,7 +298,7 @@ class Events2Calendar():
             print (linetext)
             # filtered_linetext = li
             filtered_linetext = self.filter_text(copy.copy(linetext))
-            event, prev_line_date = parse_line(filtered_linetext, summaryprefix=summaryprefix, prev_line_date=prev_line_date)
+            event, prev_line_date = parse_line(filtered_linetext, summaryprefix=summaryprefix, default_date=prev_line_date)
             # print event
             if event is None:
                 # print ("toto je prazdny radek")
@@ -354,7 +377,7 @@ class Events2Calendar():
                 if duplicity == 'particular':
                     msg_status = 'Created (with collision)'
                     msg_event = start + ' ' + new_event['summary']
-                    msg_collision = '\nCollision: ' + collision_event_summary + '\n\n'
+                    msg_collision = '\nCollision: ' + str(collision_event_summary) + '\n\n'
                 else:
                     msg_status = 'Created: '
                     msg_event = start + ' ' + new_event['summary'] + '\n\n'
@@ -379,7 +402,7 @@ class Events2Calendar():
         eventisum_utf8 = ''
 
         esummary_utf8 = event['summary'].encode('utf8')
-        print ("Checked event: " + esummary_utf8)
+        print ("Checked event: " + str(esummary_utf8))
 
         start_dt, end_dt = self.event_time(event)
         print (start_dt)
@@ -410,10 +433,14 @@ class Events2Calendar():
 
 
             msg = msg + msgprefix + str(start) + ' '
-            msg = msg + summary_utf8 + '\n'
+            msg = msg + str(summary_utf8) + '\n'
             # print(start, event['summary'])
 
-        return retval, msg.decode("utf8"), eventisum_utf8.decode("utf8"), events
+        if sys.version_info.major == 2:
+
+            return retval, msg.decode("utf8"), eventisum_utf8.decode("utf8"), events
+        else:
+            return retval, msg, eventisum_utf8, events
         # print (events)
 
     def event_time(self, event):
@@ -507,8 +534,36 @@ def create_event(service):
 
     event = service.events().insert(calendarId='primary', body=event).execute()
 
+def parse_line_time(linetext, default_start_time=None, default_end_time=None):
+    timere_remove = r' ?(from|to|od|do|-)? ?\d{1,2}:\d{2}( hod.| hodin| hod)?'
+    timere = r' ?\d{1,2}:\d{2}'
 
-def parse_line(linetext, summaryprefix='', prev_line_date=""):
+    out_time = re.findall(timere, linetext)
+
+    linetext = re.sub(timere_remove, '', linetext, 2)
+    # if out_time is None:
+    #     start_time = ''
+    # else:
+    #     start_time = out_time.group(0)
+
+    # findout which is first
+    if len(out_time) == 0:
+        start_time = None
+        end_time = None
+    elif len(out_time) == 1:
+        start_time = out_time[0]
+        end_time = None
+    else:
+        if dateutil.parser.parse(out_time[0]) < dateutil.parser.parse(out_time[1]):
+            start_time = out_time[0]
+            end_time = out_time[1]
+        else:
+            start_time = out_time[1]
+            end_time = out_time[0]
+
+    return linetext, start_time, end_time
+
+def parse_line(linetext, summaryprefix='', default_date="", default_start_time=None, default_end_time=None):
     """
     Nalezne na radce datum a cas. zbytek je povazovan za sumary
     Args:
@@ -529,15 +584,7 @@ def parse_line(linetext, summaryprefix='', prev_line_date=""):
     # remove multiple spaces
     linetext = re.sub(r' +', r' ', linetext)
 
-    timere = r' ?\d{1,2}:\d{2}'
-
-    out_time = re.search(timere, linetext)
-
-    linetext = re.sub(timere, '', linetext, 1)
-    if out_time is None:
-        cas = ''
-    else:
-        cas = out_time.group(0)
+    linetext, start_time, end_time = parse_line_time(linetext, default_start_time=default_start_time, default_end_time=default_end_time)
 
     # swap month and day and add spaces
     linetext = re.sub(r'(\d{1,2})\. *(\d{1,2})\.? *(\d{0,4})', r'\2. \1. \3', linetext)
@@ -549,43 +596,53 @@ def parse_line(linetext, summaryprefix='', prev_line_date=""):
     out_date = re.search(datere, linetext)
     
     if out_date is None:
-        if out_time is None:
+        if start_time is None:
             return None, ""
         else:
-            datum = prev_line_date
+            datum = default_date
     else:
         datum = out_date.group(0)
     print (datum)
 
-    prev_line_date = datum
+    default_date = datum
     linetext = re.sub(datere, '', linetext)
 
 
     # print cas
 
-    parsed = datum + " " + cas
-    print (parsed)
+    recognized_start_datetime = datum
+    if start_time is not None:
+        recognized_start_datetime += " " + start_time
+    print (recognized_start_datetime)
 
-    dt = dateparser.parse(parsed)
-    dt = tzprague.localize(dt)
+    dt_start = dateparser.parse(recognized_start_datetime)
+    dt_start = tzprague.localize(dt_start)
+
+    print("end_time         " + str(end_time))
+    if end_time is None:
+        dt_end = (dt_start + datetime.timedelta(hours=1))
+    else:
+        recognized_end_datetime = datum + " " + end_time
+        dt_end = dateparser.parse(recognized_end_datetime)
+        dt_end = tzprague.localize(dt_end)
     # print dt
     # print linetext
     event = {
         'summary': summaryprefix + ' ' + linetext,
         # 'description': 'A chance to hear more about Google\'s developer products.',
         'start': {
-            'dateTime': dt.isoformat(),
+            'dateTime': dt_start.isoformat(),
             'timeZone': 'Europe/Prague',
         },
         'end': {
-            'dateTime': (dt + datetime.timedelta(hours=1)).isoformat(),
+            'dateTime': dt_end.isoformat(),
             'timeZone': 'Europe/Prague',
             # 'timeZone': 'America/Los_Angeles',
         },
 
 
     }
-    return event, prev_line_date
+    return event, default_date
 
 def calendar_processing():
     """Shows basic usage of the Google Calendar API.

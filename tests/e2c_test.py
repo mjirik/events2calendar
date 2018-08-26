@@ -7,9 +7,9 @@ import mail2calendar
 
 
 class Events2CalendarTests(unittest.TestCase):
-    @attr('interactive')
-    def test_something(self):
-        self.assertEqual(True, False)
+    # @attr('interactive')
+    # def test_something(self):
+    #     self.assertEqual(True, False)
 
     def test_format_event(self):
         e2c = mail2calendar.Events2Calendar()
@@ -24,11 +24,13 @@ Naháňka\
 7.1. So. 8:30 Splž LCH Harm.Kozí Sz: skládka 'nad Pechrem'".decode("utf8")
                        )
         formated_event = e2c._format_event(e2c.mevents[0])
-        print formated_event
+        print(formated_event)
         self.assertTrue(False)
 
-
-
+    def test_parse_time(self):
+        linetext, start_time, end_time = mail2calendar.parse_line_time("13.7. od 20:00 do 21:00")
+        self.assertIsNotNone(start_time)
+        self.assertIsNotNone(end_time)
 
 
 if __name__ == '__main__':
